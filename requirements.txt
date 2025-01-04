@@ -6,3 +6,4 @@ pymysql
 alembic
 motor
 cryptography
+dotenv

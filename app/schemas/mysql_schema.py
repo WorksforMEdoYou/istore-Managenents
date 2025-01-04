@@ -1,20 +1,26 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 from typing import Optional
+from enum import Enum
+
+class StoreStatus(str, Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    CLOSED = "closed"
 
 class StoreDetailsBase(BaseModel):
-    store_name: str
-    license_number: str
-    gst_state_code: str
-    gst_number: str
-    pan: str
+    store_name: constr(max_length=255)
+    license_number: constr(max_length=50)
+    gst_state_code: constr(max_length=2)
+    gst_number: constr(max_length=50)
+    pan: constr(max_length=10)
     address: str
-    email: str
-    mobile: str
-    owner_name: str
+    email: constr(max_length=100)
+    mobile: constr(max_length=15)
+    owner_name: constr(max_length=255)
     is_main_store: bool
     latitude: float
     longitude: float
-    status: str  # Corrected annotation
+    status: StoreStatus  # the store status can be active, inactive or closed
 
 class StoreDetailsCreate(StoreDetailsBase):
     pass
@@ -26,7 +32,7 @@ class StoreDetails(StoreDetailsBase):
         from_attributes = True
 
 class ManufacturerBase(BaseModel):
-    manufacturer_name: str
+    manufacturer_name: constr(max_length=255)
 
 class ManufacturerCreate(ManufacturerBase):
     pass
@@ -39,7 +45,7 @@ class Manufacturer(ManufacturerBase):
 
 class SubstituteBase(BaseModel):
     medicine_id: int
-    substitute_medicine: str
+    substitute_medicine: constr(max_length=255)
 
 class SubstituteCreate(SubstituteBase):
     pass
@@ -51,7 +57,7 @@ class Substitute(SubstituteBase):
         from_attributes = True
 
 class CategoryBase(BaseModel):
-    category_name: str
+    category_name: constr(max_length=255)
 
 class CategoryCreate(CategoryBase):
     pass
@@ -63,12 +69,12 @@ class Category(CategoryBase):
         from_attributes = True
 
 class MedicineMasterBase(BaseModel):
-    medicine_name: str
-    generic_name: str
-    hsn_code: str
-    formulation: str
-    strength: str
-    unit_of_measure: str
+    medicine_name: constr(max_length=255)
+    generic_name: constr(max_length=255)
+    hsn_code: constr(max_length=10)
+    formulation: constr(max_length=50)
+    strength: constr(max_length=50)
+    unit_of_measure: constr(max_length=10)
     manufacturer_id: int
     category_id: int
 
@@ -81,10 +87,15 @@ class MedicineMaster(MedicineMasterBase):
     class Config:
         from_attributes = True
 
+class UserRole(str, Enum):
+    SHOP_KEEPER = "store_keeper" 
+    ADMIN = "admin" 
+    CUSTOMER = "consumer"
+
 class UserBase(BaseModel):
-    username: str
-    password_hash: str
-    role: str
+    username: constr(max_length=255)
+    password_hash: constr(max_length=255)
+    role: UserRole
     store_id: Optional[int]
 
 class UserCreate(UserBase):
@@ -97,7 +108,7 @@ class User(UserBase):
         from_attributes = True
 
 class DistributorBase(BaseModel):
-    distributor_name: str
+    distributor_name: constr(max_length=255)
 
 class DistributorCreate(DistributorBase):
     pass

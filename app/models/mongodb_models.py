@@ -1,8 +1,9 @@
 #mongodb_models.py
 from bson import ObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, constr
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
 
 class ObjectIdField(str):
     @classmethod
@@ -23,12 +24,25 @@ class OrderItem(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
+class OrderStatus(str, Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+class PaymentMethod(str, Enum):
+    ONLINE = "online"
+    CASH = "cash"
+    COD = "cod"
+
+
 class Order(BaseModel):
     store_id: int
     customer_id: int
     order_date: datetime
-    order_status: str  # "pending", "processing", "shipped", "delivered", "cancelled"
-    payment_method: str  # "online", "cash", "cod"
+    order_status: OrderStatus  # "pending", "processing", "shipped", "delivered", "cancelled"
+    payment_method: PaymentMethod  # "online", "cash", "cod"
     total_amount: float
     order_items: List[OrderItem]
     class Config:
@@ -63,7 +77,7 @@ class Stock(BaseModel):
     discount: float
     net_rate: float
     units_per_pack: int
-    units_per_pack_uom: str
+    units_per_pack_uom: constr(max_length=10)
     class Config:
         arbitrary_types_allowed = True
 
@@ -73,7 +87,7 @@ class PurchaseItem(BaseModel):
     quantity: int
     price: float
     units_per_pack: int
-    units_per_pack_uom: str
+    units_per_pack_uom: constr(max_length=10)
     class Config:
         arbitrary_types_allowed = True
 
@@ -87,10 +101,10 @@ class Purchase(BaseModel):
         arbitrary_types_allowed = True
 
 class Customer(BaseModel):
-    name: str
-    mobile: str
-    email: str
-    password_hash: str
+    name: constr(max_length=255)
+    mobile: constr(max_length=15)
+    email: constr(max_length=255)
+    password_hash: constr(max_length=255)
     class Config:
         arbitrary_types_allowed = True
 

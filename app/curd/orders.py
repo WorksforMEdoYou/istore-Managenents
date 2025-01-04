@@ -4,8 +4,13 @@ from datetime import datetime
 from typing import List, Optional
 from ..db.mongodb import get_database
 from ..models.mongodb_models import Order
+import logging
 
 router = APIRouter()
+
+# Configure logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 @router.post("/orders/", response_model=Order)
 async def create_order(order: Order, db=Depends(get_database)):
@@ -13,8 +18,10 @@ async def create_order(order: Order, db=Depends(get_database)):
         order_dict = order.dict(by_alias=True)
         result = await db.orders.insert_one(order_dict)
         order_dict["_id"] = str(result.inserted_id)
+        logger.info(f"Order created with ID: {order_dict['_id']}")
         return order_dict
     except Exception as e:
+        logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
 @router.get("/orders/{order_id}", response_model=Order)
@@ -26,6 +33,7 @@ async def get_order(order_id: str, db=Depends(get_database)):
             return order
         raise HTTPException(status_code=404, detail="Order not found")
     except Exception as e:
+        logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
 @router.get("/orders/", response_model=List[Order])
@@ -53,4 +61,5 @@ async def list_orders(
             order["_id"] = str(order["_id"])
         return orders
     except Exception as e:
+        logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
