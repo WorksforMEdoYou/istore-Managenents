@@ -24,6 +24,17 @@ async def create_sale_order(sale: Sale, db=Depends(get_database)):
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
+@router.get("/sales/", response_model=List[Sale])
+async def read_sales(db=Depends(get_database)):
+    try:
+        sales = await db.sales.find().to_list(length=1000)
+        for sale in sales:
+            sale["_id"] = str(sale["_id"])
+        return sales
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
 @router.get("/sales/{sale_id}", response_model=Sale)
 async def get_sale_order(sale_id: str, db=Depends(get_database)):
     try:
@@ -36,27 +47,26 @@ async def get_sale_order(sale_id: str, db=Depends(get_database)):
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/sales/", response_model=List[Sale])
-async def list_sale_orders(
-    customer_id: Optional[str] = None,
-    sale_date: Optional[datetime] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    db=Depends(get_database)
-):
+@router.put("/sales/{sale_id}", response_model=Sale)
+async def update_sale_order(sale_id: str, sale: Sale, db=Depends(get_database)):
     try:
-        query = {}
-        if customer_id:
-            query["customer_id"] = ObjectId(customer_id)
-        if sale_date:
-            query["sale_date"] = sale_date
-        if start_date and end_date:
-            query["sale_date"] = {"$gte": start_date, "$lte": end_date}
-        
-        sales = await db.sales.find(query).to_list(length=100)
-        for sale in sales:
-            sale["_id"] = str(sale["_id"])
-        return sales
+        sale_dict = sale.dict(by_alias=True)
+        update_result = await db.sales.update_one({"_id": ObjectId(sale_id)}, {"$set": sale_dict})
+        if update_result.modified_count == 1:
+            sale_dict["_id"] = str(sale_dict["_id"])
+            return sale_dict
+        raise HTTPException(status_code=404, detail="Sale order not found")
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+@router.delete("/sales/{sale_id}", response_model=dict)
+async def delete_sale_order(sale_id: str, db=Depends(get_database)):
+    try:
+        delete_result = await db.sales.delete_one({"_id": ObjectId(sale_id)})
+        if delete_result.deleted_count == 1:
+            return {"message": "Sale order deleted successfully"}
+        raise HTTPException(status_code=404, detail="Sale order not found")
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))

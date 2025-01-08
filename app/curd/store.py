@@ -6,6 +6,7 @@ from ..db.mysql_session import get_db
 from ..models.mysql_models import StoreDetails as StoreDetailsModel
 from ..schemas.mysql_schema import StoreDetailsCreate, StoreDetails
 import logging
+from typing import List
 
 router = APIRouter()
 
@@ -26,8 +27,29 @@ def add_store(store: StoreDetailsCreate, db: Session = Depends(get_db)):
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
+@router.get("/stores/", response_model=List[StoreDetails])
+def list_stores(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    try:
+        stores = db.query(StoreDetailsModel).offset(skip).limit(limit).all()
+        return stores
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+@router.get("/stores/{store_id}", response_model=StoreDetails)
+def get_store(store_id: int, db: Session = Depends(get_db)):
+    try:
+        store = db.query(StoreDetailsModel).filter(StoreDetailsModel.store_id == store_id).first()
+        if store:
+            return store
+        else:
+            raise HTTPException(status_code=404, detail="Store not found")
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
 @router.put("/stores/{store_id}", response_model=StoreDetails)
-def modify_store(store_id: int, store: StoreDetailsCreate, db: Session = Depends(get_db)):
+def update_store(store_id: int, store: StoreDetailsCreate, db: Session = Depends(get_db)):
     try:
         db_store = db.query(StoreDetailsModel).filter(StoreDetailsModel.store_id == store_id).first()
         if not db_store:
@@ -39,33 +61,22 @@ def modify_store(store_id: int, store: StoreDetailsCreate, db: Session = Depends
         db.commit()
         db.refresh(db_store)
         return db_store
-    except SQLAlchemyError as e:
+    except Exception as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/stores/{store_id}", response_model=StoreDetails)
-def get_store(store_id: int, db: Session = Depends(get_db)):
+@router.delete("/stores/{store_id}", response_model=dict)
+def delete_store(store_id: int, db: Session = Depends(get_db)):
     try:
         db_store = db.query(StoreDetailsModel).filter(StoreDetailsModel.store_id == store_id).first()
         if not db_store:
             raise HTTPException(status_code=404, detail="Store not found")
-        return db_store
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database error: " + str(e))
-
-@router.get("/stores/", response_model=list[StoreDetails])
-def list_stores(storename: Optional[str] = None, location: Optional[str] = None, status: Optional[str] = None, db: Session = Depends(get_db)):
-    try:
-        query = db.query(StoreDetailsModel)
-        if storename:
-            query = query.filter(StoreDetailsModel.store_name == storename)
-        if location:
-            query = query.filter(StoreDetailsModel.address == location)
-        if status:
-            query = query.filter(StoreDetailsModel.status == status)
-        return query.all()
-    except SQLAlchemyError as e:
+        
+        db.delete(db_store)
+        db.commit()
+        return {"message": "Store deleted successfully"}
+    except Exception as e:
+        db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))

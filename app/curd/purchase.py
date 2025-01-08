@@ -24,6 +24,17 @@ async def create_purchase(purchase: Purchase, db=Depends(get_database)):
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
+@router.get("/purchases/", response_model=List[Purchase])
+async def get_all_purchases(skip: int = 0, limit: int = 10, db=Depends(get_database)):
+    try:
+        purchases = await db.purchases.find().skip(skip).limit(limit).to_list(length=limit)
+        for purchase in purchases:
+            purchase["_id"] = str(purchase["_id"])
+        return purchases
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
 @router.get("/purchases/{purchase_id}", response_model=Purchase)
 async def get_purchase(purchase_id: str, db=Depends(get_database)):
     try:
@@ -36,27 +47,27 @@ async def get_purchase(purchase_id: str, db=Depends(get_database)):
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/purchases/", response_model=List[Purchase])
-async def list_purchases(
-    distributor_id: Optional[int] = None,
-    purchase_date: Optional[datetime] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    db=Depends(get_database)
-):
+@router.put("/purchases/{purchase_id}", response_model=Purchase)
+async def update_purchase(purchase_id: str, purchase: Purchase, db=Depends(get_database)):
     try:
-        query = {}
-        if distributor_id:
-            query["distributor_id"] = distributor_id
-        if purchase_date:
-            query["purchase_date"] = purchase_date
-        if start_date and end_date:
-            query["purchase_date"] = {"$gte": start_date, "$lte": end_date}
-        
-        purchases = await db.purchases.find(query).to_list(length=100)
-        for purchase in purchases:
-            purchase["_id"] = str(purchase["_id"])
-        return purchases
+        purchase_dict = purchase.dict(by_alias=True)
+        update_result = await db.purchases.update_one({"_id": ObjectId(purchase_id)}, {"$set": purchase_dict})
+        if update_result.modified_count == 1:
+            purchase_dict["_id"] = str(purchase_dict["_id"])
+            return purchase_dict
+        raise HTTPException(status_code=404, detail="Purchase not found")
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+@router.delete("/purchases/{purchase_id}", response_model=dict)
+async def delete_purchase(purchase_id: str, db=Depends(get_database)):
+    try:
+        delete_result = await db.purchases.delete_one({"_id": ObjectId(purchase_id)})
+        if delete_result.deleted_count == 1:
+            return {"message": "Purchase deleted successfully"}
+        raise HTTPException(status_code=404, detail="Purchase not found")
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+    

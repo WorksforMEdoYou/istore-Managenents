@@ -7,3 +7,6 @@ alembic
 motor
 cryptography
 dotenv
+python-multipart
+passlib
+bcrypt

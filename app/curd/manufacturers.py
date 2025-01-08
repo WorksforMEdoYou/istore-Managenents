@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..db.mysql_session import get_db
 from ..models.mysql_models import Manufacturer as ManufacturerModel
-from ..schemas.mysql_schema import ManufacturerCreate, Manufacturer
+from ..schemas.mysql_schema import Manufacturer as ManufacturerSchema, ManufacturerCreate
 import logging
+from typing import List
 
 router = APIRouter()
 
@@ -12,7 +13,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-@router.post("/manufacturers/", response_model=Manufacturer)
+@router.post("/manufacturers/", response_model=ManufacturerSchema)
 def create_manufacturer(manufacturer: ManufacturerCreate, db: Session = Depends(get_db)):
     try:
         db_manufacturer = ManufacturerModel(**manufacturer.dict())
@@ -20,32 +21,33 @@ def create_manufacturer(manufacturer: ManufacturerCreate, db: Session = Depends(
         db.commit()
         db.refresh(db_manufacturer)
         return db_manufacturer
-    except SQLAlchemyError as e:
-        db.rollback()
+    except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/manufacturers/{manufacturer_id}", response_model=Manufacturer)
-def get_manufacturer(manufacturer_id: int, db: Session = Depends(get_db)):
-    try:
-        db_manufacturer = db.query(ManufacturerModel).filter(ManufacturerModel.manufacturer_id == manufacturer_id).first()
-        if not db_manufacturer:
-            raise HTTPException(status_code=404, detail="Manufacturer not found")
-        return db_manufacturer
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database error: " + str(e))
-
-@router.get("/manufacturers/", response_model=list[Manufacturer])
+@router.get("/manufacturers/", response_model=List[ManufacturerSchema])
 def list_manufacturers(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     try:
-        return db.query(ManufacturerModel).offset(skip).limit(limit).all()
-    except SQLAlchemyError as e:
+        manufacturers = db.query(ManufacturerModel).offset(skip).limit(limit).all()
+        return manufacturers
+    except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.put("/manufacturers/{manufacturer_id}", response_model=Manufacturer)
-def modify_manufacturer(manufacturer_id: int, manufacturer: ManufacturerCreate, db: Session = Depends(get_db)):
+@router.get("/manufacturers/{manufacturer_id}", response_model=ManufacturerSchema)
+def get_manufacturer(manufacturer_id: int, db: Session = Depends(get_db)):
+    try:
+        manufacturer = db.query(ManufacturerModel).filter(ManufacturerModel.manufacturer_id == manufacturer_id).first()
+        if manufacturer:
+            return manufacturer
+        else:
+            raise HTTPException(status_code=404, detail="Manufacturer not found")
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+@router.put("/manufacturers/{manufacturer_id}", response_model=ManufacturerSchema)
+def update_manufacturer(manufacturer_id: int, manufacturer: ManufacturerCreate, db: Session = Depends(get_db)):
     try:
         db_manufacturer = db.query(ManufacturerModel).filter(ManufacturerModel.manufacturer_id == manufacturer_id).first()
         if not db_manufacturer:
@@ -57,7 +59,22 @@ def modify_manufacturer(manufacturer_id: int, manufacturer: ManufacturerCreate, 
         db.commit()
         db.refresh(db_manufacturer)
         return db_manufacturer
-    except SQLAlchemyError as e:
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+@router.delete("/manufacturers/{manufacturer_id}", response_model=dict)
+def delete_manufacturer(manufacturer_id: int, db: Session = Depends(get_db)):
+    try:
+        db_manufacturer = db.query(ManufacturerModel).filter(ManufacturerModel.manufacturer_id == manufacturer_id).first()
+        if not db_manufacturer:
+            raise HTTPException(status_code=404, detail="Manufacturer not found")
+        
+        db.delete(db_manufacturer)
+        db.commit()
+        return {"message": "Manufacturer deleted successfully"}
+    except Exception as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))

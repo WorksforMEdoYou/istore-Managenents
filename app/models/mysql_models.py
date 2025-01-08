@@ -27,12 +27,14 @@ class Manufacturer(Base):
     
     manufacturer_id = Column(Integer, primary_key=True, autoincrement=True)
     manufacturer_name = Column(String(255))
+    medicines = relationship("MedicineMaster", back_populates="manufacturer")
 
 class Category(Base):
     __tablename__ = 'category'
     
     category_id = Column(Integer, primary_key=True, autoincrement=True)
     category_name = Column(String(255))
+    medicines = relationship("MedicineMaster", back_populates="category")
 
 class MedicineMaster(Base):
     __tablename__ = 'medicine_master'
@@ -43,10 +45,12 @@ class MedicineMaster(Base):
     hsn_code = Column(String(10))
     formulation = Column(String(50))
     strength = Column(String(50))
-    batch = Column(String(50))
+    #batch = Column(String(50))
     unit_of_measure = Column(String(10))
     manufacturer_id = Column(Integer, ForeignKey('manufacturer.manufacturer_id'))
     category_id = Column(Integer, ForeignKey('category.category_id'))
+    manufacturer = relationship("Manufacturer", back_populates="medicines")
+    category = relationship("Category", back_populates="medicines")
 
 class Substitutes(Base):
     __tablename__ = 'substitutes'

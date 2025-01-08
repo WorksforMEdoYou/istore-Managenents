@@ -1,11 +1,10 @@
-#mongodb_models.py
 from bson import ObjectId
 from pydantic import BaseModel, Field, constr
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 from enum import Enum
 
-class ObjectIdField(str):
+class PyObjectId(str):
     @classmethod
     def __get_validators__(cls):
         yield cls.validate
@@ -14,7 +13,7 @@ class ObjectIdField(str):
     def validate(cls, v):
         if not isinstance(v, (str, ObjectId)):
             raise ValueError('Invalid ObjectId')
-        return ObjectId(v) if isinstance(v, str) else v
+        return str(v) if isinstance(v, ObjectId) else v
 
 class OrderItem(BaseModel):
     medicine_id: int
@@ -36,10 +35,9 @@ class PaymentMethod(str, Enum):
     CASH = "cash"
     COD = "cod"
 
-
 class Order(BaseModel):
     store_id: int
-    customer_id: int
+    customer_id: str # changed str ObjectIdField
     order_date: datetime
     order_status: OrderStatus  # "pending", "processing", "shipped", "delivered", "cancelled"
     payment_method: PaymentMethod  # "online", "cash", "cod"
@@ -59,7 +57,7 @@ class SaleItem(BaseModel):
 class Sale(BaseModel):
     store_id: int
     sale_date: datetime
-    customer_id: int
+    customer_id: str = Field(foreign_key="customer_id")  # Changed from int
     total_amount: float
     invoice_id: int
     sale_items: List[SaleItem]
@@ -70,22 +68,27 @@ class Stock(BaseModel):
     medicine_id: int
     manufacturer_id: int
     distributor_id: int
-    expiry_date: datetime
+    #expiry_date: datetime
     available_stock: int
     mrp: float
     batches: List[int]
-    discount: float
-    net_rate: float
+    #discount: float
+    #net_rate: float
     units_per_pack: int
     units_per_pack_uom: constr(max_length=10)
     class Config:
         arbitrary_types_allowed = True
 
+class Batches(BaseModel):
+    batch_id: int
+
 class PurchaseItem(BaseModel):
     medicine_id: int
-    batch_id: int
+    batch_id: Batches
+    expiry_date: str
     quantity: int
     price: float
+    unit_price:float
     units_per_pack: int
     units_per_pack_uom: constr(max_length=10)
     class Config:
@@ -96,6 +99,7 @@ class Purchase(BaseModel):
     purchase_date: datetime
     distributor_id: int
     total_amount: float
+    invoice_number : int
     purchase_items: List[PurchaseItem]
     class Config:
         arbitrary_types_allowed = True
@@ -105,6 +109,7 @@ class Customer(BaseModel):
     mobile: constr(max_length=15)
     email: constr(max_length=255)
     password_hash: constr(max_length=255)
+    doctor_name: constr(max_length=255)
     class Config:
         arbitrary_types_allowed = True
 
