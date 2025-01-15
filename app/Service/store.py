@@ -2,12 +2,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List
 from ..schemas.mysql_schema import StoreDetailsCreate, StoreDetails
-from ..models.mysql_models import (StoreDetails as StoreDetailsModel, MedicineMaster as MedicineMasterModel)
+from ..models.mysql_models import (StoreDetails as StoreDetailsModel, MedicineMaster as MedicineMasterModel, Manufacturer as ManufacturerModel, Category as CategoryModel)
 from ..models.mongodb_models import Order, SaleItem, Stock, MedicineAvailability, Sale
 from ..db.mysql_session import get_db
 from ..db.mongodb import get_database
 import logging
 from sqlalchemy.exc import SQLAlchemyError
+from bson import ObjectId
 
 # configuring the logger
 logger = logging.getLogger(__name__)
@@ -18,9 +19,17 @@ router = APIRouter()
 # Create Store - Validate input and insert store details in db with verification status as pending
 @router.post("/stores/", response_model=StoreDetails)
 def add_store(store: StoreDetailsCreate, db: Session = Depends(get_db)):
-    if store.store_name == "string" or store.license_number == "string" or store.gst_number == "string":
-        raise HTTPException(status_code=400, detail="Invalid input")
+    # this is for the actual fastapi swagger page apis
+    #if store.store_name == "string" or store.license_number == "string" or store.gst_number == "string":
+    #    raise HTTPException(status_code=400, detail="Invalid input")
+    if not store.store_name or not store.license_number or not store.gst_number:
+       raise HTTPException(status_code=400, detail="Invalid input")
     try:
+        #cheacking for the license_number, cause the license number can be unique
+        already_present = db.query(StoreDetailsModel).filter(StoreDetailsModel.license_number == store.license_number).first()
+        if already_present:
+            raise HTTPException(status_code=400, detail="Store already exists")
+        #inserting the store details in db
         db_store = StoreDetailsModel(**store.dict())
         db.add(db_store)
         db.commit()
@@ -30,29 +39,6 @@ def add_store(store: StoreDetailsCreate, db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
-
-# List Orders - Fetch order list which is not in delivered status with details
-@router.get("/orders/")
-async def list_orders(mongo_db = Depends(get_database)):
-    orders = mongo_db["orders"].find({"order_status": {"$ne": "delivered"}})
-    result = []
-    async for order in orders:
-        order_data = {
-            "customer_name": order["customer_name"],
-            "payment_status": order["payment_status"],
-            "total_items": order["total_items"],
-            "order_status": order["order_status"],
-            "medicines": []
-        }
-        for item in order["order_items"]:
-            order_data["medicines"].append({
-                "medicine_name": item["medicine_name"],
-                "quantity": item["quantity"],
-                "price": item["price"],
-                "total_cost": item["quantity"] * item["price"]
-            })
-        result.append(order_data)
-    return result
 
 # Create Sales - Sales need to be created by executing the logic for stock verification and updates
 @router.post("/sales/")
@@ -94,44 +80,271 @@ async def create_sales(sales: List[SaleItem], mongo_db = Depends(get_database)):
     
     return {"status": "Sales created successfully"}
 
+from app.models.mongodb_models import Sale 
+@router.post("/create/sale/", response_model=Sale)
+async def sales_create(sale: Sale, mongo_db=Depends(get_database)):
+    try:
+        sale_dict = sale.dict(by_alias=True)
+        sales_items = sale_dict["sale_items"]
+        store_id = sale_dict["store_id"]
+        
+        for item in sales_items:
+            medicine_id = item["medicine_id"]
+            quantity = item["quantity"]
+
+            if quantity <= 0:
+                raise HTTPException(status_code=400, detail="Invalid quantity")
+
+            # Fetch the medicine stock
+            medicine_stock = await mongo_db["stocks"].find_one(
+                {"store_id":store_id, "medicine_id": medicine_id, "available_stock": {"$gt": 0}},
+                sort=[("batch_detais.expiry_date", 1)]
+            )
+
+            if not medicine_stock:
+                raise HTTPException(status_code=404, detail="Medicine not available")
+            
+            batch_id = medicine_stock["_id"]
+            expiry_date = medicine_stock["batch_detais"]["expiry_date"]
+            available_quantity = medicine_stock["batch_detais"]["batch_quantity"]
+            item["expiry_date"]=str(expiry_date)
+            if available_quantity <= quantity:
+                quantity -= available_quantity
+                await mongo_db["stocks"].update_one(
+                    {"_id": ObjectId(str(batch_id))},
+                    {"$set": {"available_stock": 0, "batch_detais.batch_quantity": 0}}
+                )
+                await mongo_db["medicine_availability"].update_one(
+                    {"store_id": store_id, "medicine_id": medicine_id},
+                    {"$set": {"available_quantity": 0}}
+                )
+            else:
+                await mongo_db["stocks"].update_one(
+                    {"_id": ObjectId(str(batch_id))},
+                    {"$inc": {"available_stock": -quantity, "batch_detais.batch_quantity": -quantity}}
+                )
+                await mongo_db["medicine_availability"].update_one(
+                    {"store_id": store_id, "medicine_id": medicine_id},
+                    {"$inc": {"available_quantity": -quantity}}
+                )
+                quantity = 0
+            
+        result = await mongo_db["sales"].insert_one(sale_dict)
+        sale_dict["_id"] = str(result.inserted_id)
+
+        return sale_dict  # Return the created sale object
+
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))
+
+# List orders
+@router.get("/orders/list/")
+async def orders_list(mongo_db = Depends(get_database)):
+    try:
+        session = await mongo_db.client.start_session()
+        async with session.start_transaction():
+            result=[]
+            orders_cursor = mongo_db["orders"].find({"order_status": {"$ne": "delivered"}})
+            orders = await orders_cursor.to_list(length=None)
+            for order in orders:
+                customer_id = str(order["customer_id"])
+                order_status = order["order_status"]
+                payment_method = order["payment_method"]
+                items = len(order["order_items"])
+                customers_cursor = mongo_db["customers"].find({"_id": ObjectId(customer_id)})
+                customers = await customers_cursor.to_list(length=None)
+                for customer in customers:
+                    customer_name = customer["name"]
+                    doctor_name = customer["doctor_name"]
+                    order_list = {
+                        "customer_name": customer_name,
+                        "doctor_name": doctor_name,
+                        "order_status": order_status,
+                        "payment_method": payment_method
+                    }
+                    result.append(order_list)
+        return result if len(result)>0 else {"No orders Found"}
+    except Exception as e:
+        logger.error(f"Database Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
+
 # Get sales History the status must be Delevered
 @router.get("/sales/history/")
 async def sales_history(mongo_db = Depends(get_database)):
-    session = await mongo_db.client.start_session()
-    async with session.start_transaction():
-        customers_cursor = mongo_db["customers"].find()  # Fetch all customers
-        result = []
-        customers = await customers_cursor.to_list(length=None)
-        print(customers)
-        for customer in customers:
-            customer_id = customer["_id"]
-            print(f"{customer_id}, {type(customer_id)}")
-            orders_cursor = mongo_db["orders"].find({"customer_id": customer_id, "order_status": "delivered"})  # Fetch orders with status "delivered"
-            orders = await orders_cursor.to_list(length=None)
-            for order in orders:
-                sale_data = {
+    try:
+        session = await mongo_db.client.start_session()
+        async with session.start_transaction():
+            customers_cursor = mongo_db["customers"].find()  # Fetch all customers
+            result = []
+            customers = await customers_cursor.to_list(length=None)
+            for customer in customers:
+                customer_id = customer["_id"]
+                print(f"{customer_id}, {type(customer_id)}")
+                orders_cursor = mongo_db["orders"].find({"customer_id": str(customer_id), "order_status": "delivered"})  # Fetch orders with status "delivered"
+                orders = await orders_cursor.to_list(length=None)
+                for order in orders:
+                    sale_data = {
                     "customer_name": customer["name"],
                     "doctor_name": customer["doctor_name"],
-                    "status": order["order_status"],
-                    "order_date": order["order_date"],
-                    "payment_method": order["payment_method"],
-                    "total_amount": order["total_amount"],
-                    "order_items": order["order_items"]
-                }
-                result.append(sale_data)
-    return result
+                    "status": order["order_status"]
+                    }
+                    result.append(sale_data)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"No sales found {e}")
 
-# Stocks
-@router.get("/stocks/{medicine_id}")
-async def get_details_by_medicine(
+# stocks
+@router.get("/stocks/")
+async def stocks(
+    mongo_db = Depends(get_database),
+    mysql_db: Session = Depends(get_db)):
+    try:
+        result = []
+        medicine_stocks = mongo_db["stocks"].find()  # getting all the data
+        stocks = await medicine_stocks.to_list(length=None)
+        for stock in stocks:
+            medicine_id = stock["medicine_id"]
+            medicine_form = stock["medicine_form"]
+            medicines = mysql_db.query(MedicineMasterModel).filter(MedicineMasterModel.medicine_id == medicine_id).first()
+            if medicines:
+                medicine_name = medicines.medicine_name
+                medicine_generic_name = medicines.generic_name
+                medicine_manufacturer_id = medicines.manufacturer_id
+                medicine_category_id = medicines.category_id
+            categories = mysql_db.query(CategoryModel).filter(CategoryModel.category_id == medicine_category_id).first()
+            if categories:
+                category_name = categories.category_name
+            manufacturers = mysql_db.query(ManufacturerModel).filter(ManufacturerModel.manufacturer_id == medicine_manufacturer_id).first()
+            if manufacturers:
+                manufacturer_name = manufacturers.manufacturer_name
+            is_medicine_available = mongo_db["medicine_availability"].find({"medicine_id": medicine_id})
+            is_medicine = await is_medicine_available.to_list(length=None)
+            if is_medicine:
+                for medicine_stock in is_medicine:
+                    is_stock = "In stock" if (medicine_stock["available_quantity"] > 0) else "Not In Stock"
+            medicine_pricing = mongo_db["pricing"].find({"medicine_id": medicine_id})
+            medicine_pricing = await medicine_pricing.to_list(length=None)
+            if medicine_pricing:
+                for medicine_price in medicine_pricing:
+                    medicine_mrp = medicine_price["mrp"]  # Corrected line
+                    medicine_discount = medicine_price["discount"]  # Corrected line
+                    medicine_net_price = medicine_price["net_rate"]  # Corrected line
+            medicine_purchase = mongo_db["purchases"].find({"purchase_items.medicine_id": medicine_id})
+            medicine_purchase = await medicine_purchase.to_list(length=None)
+            for purchase in medicine_purchase:
+                for item in purchase["purchase_items"]:
+                    batch_id = item["batch_id"]
+                    unit_quantity = item["unit_quantity"]
+                    package_count = item["package_count"]
+                    expiry_date = item["expiry_date"]
+
+                    medicine = {
+                        "medicine_id": medicine_id,
+                        "medicine_name": medicine_name,
+                        "medicine_form": medicine_form,
+                        "manufacturer_name": manufacturer_name,
+                        "category": category_name,
+                        "composition": medicine_generic_name,
+                        "expiry_date": expiry_date,
+                        "is_stock": is_stock,
+                        "unit_quantity": unit_quantity,
+                        "package_count": package_count,
+                        "mrp": medicine_mrp,
+                        "discount": medicine_discount,
+                        "net_rate": medicine_net_price,
+                        "batch_id": str(batch_id)
+                    }
+                    result.append(medicine)
+        return result         
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Server error {e}")       
+
+""" # Stocks Particular 
+
+Having issues in it because here i came accross the substitute table 
+
+Issues: 
+Batches->batchNumber
+Substitute -> manufacture_id
+customer -> address
+
+
+from ..models.mysql_models import Distributor
+@router.get("stocks/{medicine_id}")
+async def get_medicine_stock(
+    medicine_id: int,
     mongo_db=Depends(get_database),
-    mysql_db: Session = Depends(get_db),
-    medicine_id= int):
-    result=[]
-    # Purchases
-    purchases_cursor = mongo_db["purchases"].find({"medicine_id": medicine_id})
+    mysql_db: Session = Depends(get_db)):
+    try:
+        result=[]
+        
+        batches=[]
+        purchases=[]
+        sales=[]
+        substitute=[]
+        
+        #batches
+        medicine_availability = mongo_db["medicine_availability"].find({"medicine_id":medicine_id})
+        medicine_availability = await medicine_availability.to_list(length=None)
+        for medicineavailable in medicine_availability:
+            store_id = medicineavailable["store_id"]
+            isStock = "In Stock" if medicineavailable["available_quantity"]>0 else "Not In Stock"
+            batch = mongo_db["stocks"].find_one({"medicine_id":medicine_id, "store_id":store_id})
+            batch_id = batch["_id"]
+            batch_expitydate = batch["batch_detais"]["expiry_date"]
+            
+            medicine_price = mongo_db["pricing"].find_one({"store_id":store_id, "medicine_id":medicine_id})
+            medicine_mrp = medicine_price["mrp"]
+            medicine_discount = medicine_price["discount"]
+            medicine_net_price = medicine_price["net_rate"]
+            
+            medicine_packets = mongo_db["purchases"].find_one({"store_id":store_id, "purchase_items.medicine_id":medicine_id})
+            for medicines in medicine_packets["purchase_items"]:
+                package_count = medicines["package_count"]if medicine_packets["package_count"]>0 else 0
+                package_unitquantity = medicines["unit_quantity"]
+            
+            batch = {
+                "isStock": isStock,
+                "batch_id": str(batch_id),
+                "batch_expirydate": str(batch_expitydate),
+                "medicine_mrp": medicine_mrp,
+                "medicine_discount": medicine_discount,
+                "medicine_net_price": medicine_net_price,
+                "package_count": package_count,
+                "package_unitquantity": package_unitquantity
+            }
+            batches.append(batch)
 
-
+            # purchase
+            purchases_db = mongo_db["purchases"].find_one({"store_id":store_id, "purchase_items.medicine_id":medicine_id})
+            for purchase in purchases_db:
+                distributor_id = purchase["distributor_id"]
+                purchase_date = str(purchase["purchase_date"])
+                distributors = mysql_db.query(Distributor).filter(Distributor.distributor_id==distributor_id).first()
+                distributor_name = distributors.distributor_name    
+                for medicines in medicine_packets["purchase_items"]:
+                    batch_number = medicines["batch_id"]
+                    purchase_mrp = medicines["price"]
+                    purchase_expiry = medicines["expiry_date"]
+                    purchase_qty = medicines["quantity"]
+                    
+                    purchase_dict = {
+                        "purchase_date": purchase_date,
+                        "distributor_name": distributor_name,
+                        "batch_number": batch_number,
+                        "purchase_mrp": purchase_mrp,
+                        "purchase_expiry": purchase_expiry,
+                        "purchase_qty": purchase_qty
+                    }
+                    purchases.append(purchase_dict)
+                
+            #
+                
+            
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Server error {e}")
+ """
 # Purchase
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
@@ -141,7 +354,7 @@ from ..models.mysql_models import Distributor, StoreDetails
 from ..db.mysql_session import get_db
 from datetime import datetime
 
-#Get purchases by daterange
+#Get purchases by date range
 @router.get("/purchases/")
 async def get_purchases_by_date_range(
     mongo_db=Depends(get_database),
@@ -164,7 +377,7 @@ async def get_purchases_by_date_range(
             }).to_list(length=None)
         else:
             # Fetch all purchases from MongoDB
-            purchases = await mongo_db.purchases.find().to_list(length=None)
+           purchases = await mongo_db.purchases.find().to_list(length=None)
 
         # Iterate through each purchase
         for purchase in purchases:

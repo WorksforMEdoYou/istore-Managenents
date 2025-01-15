@@ -3,6 +3,8 @@ from typing import List
 from ..db.mongodb import get_database
 from ..models.mongodb_models import MedicineAvailability, PyObjectId
 import logging
+from bson import ObjectId
+from ..utils.utils import str_objectId
 
 router = APIRouter()
 
@@ -13,9 +15,9 @@ logging.basicConfig(level=logging.INFO)
 @router.post("/medicine_availability/", response_model=MedicineAvailability)
 async def create_medicine_availability(medicine_availability: MedicineAvailability, db=Depends(get_database)):
     try:
-        medicine_availability_dict = medicine_availability.dict(by_alias=True)
+        medicine_availability_dict = medicine_availability.dict()
         result = await db.medicine_availability.insert_one(medicine_availability_dict)
-        medicine_availability_dict["_id"] = str(result.inserted_id)
+        medicine_availability_dict["_id"] = str_objectId(result.inserted_id)
         logger.info(f"Medicine availability created with ID: {medicine_availability_dict['_id']}")
         return medicine_availability_dict
     except Exception as e:
@@ -36,7 +38,7 @@ async def get_all_medicine_availability(skip: int = 0, limit: int = 10, db=Depen
 @router.get("/medicine_availability/{id}", response_model=MedicineAvailability)
 async def get_medicine_availability(id: str, db=Depends(get_database)):
     try:
-        medicine_availability = await db.medicine_availability.find_one({"_id": PyObjectId(id)})
+        medicine_availability = await db.medicine_availability.find_one({"_id": ObjectId(id)})
         if medicine_availability:
             medicine_availability["_id"] = str(medicine_availability["_id"])
             return medicine_availability
@@ -48,9 +50,9 @@ async def get_medicine_availability(id: str, db=Depends(get_database)):
 @router.put("/medicine_availability/{id}", response_model=MedicineAvailability)
 async def update_medicine_availability(id: str, medicine_availability: MedicineAvailability, db=Depends(get_database)):
     try:
-        update_result = await db.medicine_availability.update_one({"_id": PyObjectId(id)}, {"$set": medicine_availability.dict(by_alias=True)})
+        update_result = await db.medicine_availability.update_one({"_id": ObjectId(id)}, {"$set": medicine_availability.dict()})
         if update_result.modified_count == 1:
-            updated_medicine_availability = await db.medicine_availability.find_one({"_id": PyObjectId(id)})
+            updated_medicine_availability = await db.medicine_availability.find_one({"_id": ObjectId(id)})
             if updated_medicine_availability:
                 updated_medicine_availability["_id"] = str(updated_medicine_availability["_id"])
                 return updated_medicine_availability

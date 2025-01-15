@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
-from datetime import datetime
-from typing import List, Optional
+from typing import List
+from pydantic import parse_obj_as
 from ..db.mongodb import get_database
 from ..models.mongodb_models import Order
 import logging
+from bson import ObjectId
+from ..utils.utils import str_objectId
 
 router = APIRouter()
 
@@ -17,7 +19,7 @@ async def create_order(order: Order, db=Depends(get_database)):
     try:
         order_dict = order.dict(by_alias=True)
         result = await db.orders.insert_one(order_dict)
-        order_dict["_id"] = str(result.inserted_id)
+        order_dict["_id"] = str_objectId(result.inserted_id)
         logger.info(f"Order created with ID: {order_dict['_id']}")
         return order_dict
     except Exception as e:
@@ -28,9 +30,7 @@ async def create_order(order: Order, db=Depends(get_database)):
 async def get_all_orders(skip: int = 0, limit: int = 10, db=Depends(get_database)):
     try:
         orders = await db.orders.find().skip(skip).limit(limit).to_list(length=limit)
-        for order in orders:
-            order["_id"] = str(order["_id"])
-        return orders
+        return parse_obj_as(List[Order], orders)
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
@@ -70,4 +70,19 @@ async def delete_order(order_id: str, db=Depends(get_database)):
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
-    
+
+@router.get("/orders/customer/check")
+async def get_user_from_order(db = Depends(get_database)):
+    try:
+        result = []
+        orders_cursor = db.orders.find()
+        async for order in orders_cursor:
+            customer_id = order["customer_id"]
+            customer = await db.customers.find_one({"_id": ObjectId(str(customer_id))})
+            if customer:
+                customer_name = customer["name"]
+                result.append({"customer_id": customer_id, "customer_name": customer_name})
+        return result
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database error: " + str(e))

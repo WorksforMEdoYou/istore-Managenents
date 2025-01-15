@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from .curd import (store, substitutes, distributors, manufacturers, orders, purchase, sales, stock, customers, medicineavailable, medicinemaster, category, users)
+from .curd import store, customers, medicineavailable, orders, substitutes, distributors, manufacturers, purchase, sales, stock, customers, medicinemaster, category, users, pricing
 from fastapi.encoders import jsonable_encoder
 from bson import ObjectId
 # from service our bussness model logic
@@ -32,6 +32,7 @@ app.include_router(customers.router, prefix="/api")
 app.include_router(medicineavailable.router, prefix="/api")
 app.include_router(medicinemaster.router, prefix="/api")
 app.include_router(category.router, prefix="/api")
+app.include_router(pricing.router, prefix="/api")
 
 @app.get("/")
 def read_root():
