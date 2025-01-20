@@ -1,8 +1,5 @@
 from bson import ObjectId
-from pydantic import BaseModel, Field, constr
-from typing import List
-from datetime import datetime
-from enum import Enum
+from pydantic import BaseModel, constr, Field
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -18,13 +15,17 @@ class PyObjectId(ObjectId):
     @classmethod
     def __modify_schema__(cls, field_schema):
         field_schema.update(type="string")
-
-# Nothing required 
+ 
 class Customer(BaseModel):
-    name: constr(max_length=255)
-    mobile: constr(max_length=15)
-    email: constr(max_length=255)
-    password_hash: constr(max_length=255)
-    doctor_name: constr(max_length=255)
+    
+    """
+    Base model for the Customer collection.
+    """
+      
+    name: constr(max_length=255) = Field(..., description="Customer Name")
+    mobile: constr(max_length=15) = Field(..., description="Customer Mobile")
+    email: constr(max_length=255) = Field(..., description="Customer Email")
+    password_hash: constr(max_length=255) = Field(..., description="Customer Password Hashed")
+    doctor_name: constr(max_length=255) = Field(..., description="Customer Doctor Name")
     class Config:
         arbitrary_types_allowed = True

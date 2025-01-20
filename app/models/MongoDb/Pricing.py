@@ -1,8 +1,6 @@
 from bson import ObjectId
-from pydantic import BaseModel, Field, constr
-from typing import List
+from pydantic import BaseModel, Field
 from datetime import datetime
-from enum import Enum
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -21,15 +19,20 @@ class PyObjectId(ObjectId):
 
 #require the store_id, medicine_id from the sql
 class Pricing(BaseModel):
-    store_id: int
-    medicine_id: int
-    price: float
-    mrp: float
-    discount: float
-    net_rate: float
-    is_active: bool
-    last_updated_by: str # user id or name of the person who last updated
-    updated_on: datetime
+    
+    """
+    Base model for the pricing collection.
+    """
+    
+    store_id: int = Field(..., description="Store ID from the MYSQL store_details table")
+    medicine_id: int = Field(..., description="medicine ID from the MYSQL medicine_mastrer table")
+    price: float = Field(..., description="Price of the Medicine")
+    mrp: float = Field(..., description="MRP of the medicine")
+    discount: float = Field(..., description="Discount of the Medicine")
+    net_rate: float = Field(..., description="NET Rate of the medicine")
+    is_active: bool = Field(..., description="Is Active True or False")
+    last_updated_by: str = Field(..., description="Last Updated can be a user_name or user_id from the MYSQL user table") # user id or name of the person who last updated
+    updated_on: datetime = Field(..., description="updated on")
     class Config:
         arbitrary_types_allowed = True
          

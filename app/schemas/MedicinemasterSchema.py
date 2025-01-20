@@ -1,8 +1,11 @@
 from pydantic import BaseModel, constr
 from typing import Optional
-from enum import Enum
 
 class MedicineMasterBase(BaseModel):
+    
+    """
+    Base model for MedicineMaster containing common fields.
+    """
     medicine_name: constr(max_length=255)
     generic_name: constr(max_length=255)
     hsn_code: constr(max_length=10)
@@ -13,9 +16,17 @@ class MedicineMasterBase(BaseModel):
     category_id: int
 
 class MedicineMasterCreate(MedicineMasterBase):
+    
+    """
+    Pydantic model for creating a new medicine record.
+    """
     pass
 
 class MedicineMaster(MedicineMasterBase):
+    
+    """
+    Pydantic model for representing detailed medicine information.
+    """
     medicine_id: Optional[int]
 
     class Config:

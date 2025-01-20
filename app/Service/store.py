@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 from typing import List
-from ..schemas.mysql_schema import StoreDetailsCreate, StoreDetails
-from ..models.mysql_models import (StoreDetails as StoreDetailsModel, MedicineMaster as MedicineMasterModel, Manufacturer as ManufacturerModel, Category as CategoryModel)
-from ..models.mongodb_models import Order, SaleItem, Stock, MedicineAvailability, Sale
-from ..db.mysql_session import get_db
-from ..db.mongodb import get_database
+from app.schemas.mysql_schema import StoreDetailsCreate, StoreDetails
+from app.models.mysql_models import (StoreDetails as StoreDetailsModel, MedicineMaster as MedicineMasterModel, Manufacturer as ManufacturerModel, Category as CategoryModel)
+from app.models.mongodb_models import Order, SaleItem, Stock, MedicineAvailability, Sale
+from app.db.mysql import get_db
+from app.db.mongodb import get_database
 import logging
 from sqlalchemy.exc import SQLAlchemyError
 from bson import ObjectId
@@ -19,9 +19,6 @@ router = APIRouter()
 # Create Store - Validate input and insert store details in db with verification status as pending
 @router.post("/stores/", response_model=StoreDetails)
 def add_store(store: StoreDetailsCreate, db: Session = Depends(get_db)):
-    # this is for the actual fastapi swagger page apis
-    #if store.store_name == "string" or store.license_number == "string" or store.gst_number == "string":
-    #    raise HTTPException(status_code=400, detail="Invalid input")
     if not store.store_name or not store.license_number or not store.gst_number:
        raise HTTPException(status_code=400, detail="Invalid input")
     try:
@@ -260,91 +257,61 @@ async def stocks(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Server error {e}")       
 
-""" # Stocks Particular 
-
-Having issues in it because here i came accross the substitute table 
-
-Issues: 
-Batches->batchNumber
-Substitute -> manufacture_id
-customer -> address
-
-
-from ..models.mysql_models import Distributor
-@router.get("stocks/{medicine_id}")
-async def get_medicine_stock(
-    medicine_id: int,
-    mongo_db=Depends(get_database),
-    mysql_db: Session = Depends(get_db)):
+# stock Particular Product 
+@router.get("/stock/{medicine_id}")
+async def get_stock_by_medicine(
+    medicine_id: int, 
+    mongo_db = Depends(get_database),
+    mysql_db: Session = Depends(get_db)
+    ):
     try:
-        result=[]
-        
-        batches=[]
-        purchases=[]
-        sales=[]
-        substitute=[]
-        
-        #batches
-        medicine_availability = mongo_db["medicine_availability"].find({"medicine_id":medicine_id})
-        medicine_availability = await medicine_availability.to_list(length=None)
-        for medicineavailable in medicine_availability:
-            store_id = medicineavailable["store_id"]
-            isStock = "In Stock" if medicineavailable["available_quantity"]>0 else "Not In Stock"
-            batch = mongo_db["stocks"].find_one({"medicine_id":medicine_id, "store_id":store_id})
-            batch_id = batch["_id"]
-            batch_expitydate = batch["batch_detais"]["expiry_date"]
+        result = []
+        if medicine_id:
+            #getting thr batch number and expiry date batch wise 
+            medicine_stocks = mongo_db.stocks.find({"medicine_id":medicine_id})
+            medicine_stocks = await medicine_stocks.to_list(length=None)
+            store_id = medicine_stocks["store_id"]
+            for batches in medicine_stocks["batch_detais"]:
+                batch_number = batches["batch_number"]
+                batch_medicine_expiry_date = batches["expiry_date"]
             
-            medicine_price = mongo_db["pricing"].find_one({"store_id":store_id, "medicine_id":medicine_id})
-            medicine_mrp = medicine_price["mrp"]
-            medicine_discount = medicine_price["discount"]
-            medicine_net_price = medicine_price["net_rate"]
+            #getting the mrp, discount, Netrate with shop and medicine ids
+            medicine_prices = mongo_db.pricing.find({"medicine_id":medicine_id, "store_id":store_id})
+            medicine_prices = await medicine_prices.to_list(length=None)
+            for price in medicine_prices:
+                medicine_mrp = price["mrp"]
+                medicine_discount = price["discount"]
+                medicine_net_price = price["net_rate"]
             
-            medicine_packets = mongo_db["purchases"].find_one({"store_id":store_id, "purchase_items.medicine_id":medicine_id})
-            for medicines in medicine_packets["purchase_items"]:
-                package_count = medicines["package_count"]if medicine_packets["package_count"]>0 else 0
-                package_unitquantity = medicines["unit_quantity"]
+            # is stock Available
+            medicine_available = mongo_db.medicine_availability.find({"store_id":store_id, "medicine_id":medicine_id})
+            medicine_available = await medicine_available.to_list(length=None)
+            is_available = "In Stock" if medicine_available["available_quantity"]>0 else "Not In Stock"
             
-            batch = {
-                "isStock": isStock,
-                "batch_id": str(batch_id),
-                "batch_expirydate": str(batch_expitydate),
-                "medicine_mrp": medicine_mrp,
-                "medicine_discount": medicine_discount,
-                "medicine_net_price": medicine_net_price,
-                "package_count": package_count,
-                "package_unitquantity": package_unitquantity
-            }
-            batches.append(batch)
+            # packets and units
+            medicine_units = mongo_db.purchases.find({"store_id":store_id, "purchase_items.medicine_id":medicine_id})
+            medicine_units = await medicine_units.to_list(length=None)
+            for units in medicine_units["purchase_items"][medicine_id]:
+                unit_quantity = units["unit_quantity"]
+                package_count = units["package_count"]
+                
+            result.append({
+                "is Stock": is_available,
+                "batch_number": batch_number,
+                "expiry_date": batch_medicine_expiry_date,
+                "mrp": medicine_mrp,
+                "discount": medicine_discount,
+                "net_rate": medicine_net_price,
+                "unit_quantity": unit_quantity,
+                "package_count": package_count
+            })
 
-            # purchase
-            purchases_db = mongo_db["purchases"].find_one({"store_id":store_id, "purchase_items.medicine_id":medicine_id})
-            for purchase in purchases_db:
-                distributor_id = purchase["distributor_id"]
-                purchase_date = str(purchase["purchase_date"])
-                distributors = mysql_db.query(Distributor).filter(Distributor.distributor_id==distributor_id).first()
-                distributor_name = distributors.distributor_name    
-                for medicines in medicine_packets["purchase_items"]:
-                    batch_number = medicines["batch_id"]
-                    purchase_mrp = medicines["price"]
-                    purchase_expiry = medicines["expiry_date"]
-                    purchase_qty = medicines["quantity"]
-                    
-                    purchase_dict = {
-                        "purchase_date": purchase_date,
-                        "distributor_name": distributor_name,
-                        "batch_number": batch_number,
-                        "purchase_mrp": purchase_mrp,
-                        "purchase_expiry": purchase_expiry,
-                        "purchase_qty": purchase_qty
-                    }
-                    purchases.append(purchase_dict)
-                
-            #
-                
-            
+
+        else:
+            return {"message": "Invalid medicine id"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Server error {e}")
- """
+
 # Purchase
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List

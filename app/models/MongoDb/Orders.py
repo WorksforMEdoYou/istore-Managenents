@@ -2,7 +2,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field, constr
 from typing import List
 from datetime import datetime
-from enum import Enum
+from app.models.MongoDb.Eunums import OrderStatus, PaymentMethod
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -20,36 +20,25 @@ class PyObjectId(ObjectId):
         field_schema.update(type="string")
 
 class OrderItem(BaseModel):
-    medicine_id: int
-    quantity: int
-    price: float
-    unit: str
+    medicine_id: int = Field(..., description="Medicine ID from the MYSQL medicine master table")
+    quantity: int = Field(..., description="Quantity of the ordered medicine")
+    price: float = Field(..., description="Price of the ordered medicine")
+    unit: constr(max_length=255) = Field(..., description="unit of the ordered medicine")
     class Config:
         arbitrary_types_allowed = True
 
-class OrderStatus(str, Enum):
-    def __str__(self):
-        return str(self.value)
-    PENDING = "pending"
-    PROCESSING = "processing"
-    SHIPPED = "shipped"
-    DELIVERED = "delivered"
-    CANCELLED = "cancelled"
-
-class PaymentMethod(str, Enum):
-    def __str__(self):
-        return str(self.value)
-    ONLINE = "online"
-    CASH = "cash"
-    COD = "cod"
-
 class Order(BaseModel):
-    store_id: int
-    customer_id: str # from customer id
-    order_date: datetime
-    order_status: OrderStatus  # "pending", "processing", "shipped", "delivered", "cancelled"
-    payment_method: PaymentMethod  # "online", "cash", "cod"
-    total_amount: float
-    order_items: List[OrderItem]
+    
+    """
+    Base model for the Order collection.
+    """
+    
+    store_id: int = Field(..., description="Store ID from the MYSQL store_details table")
+    customer_id: str = Field(..., description="Customer ObjectID from the Customer Collection") # from customer id
+    order_date: datetime = Field(..., description="Order Date")
+    order_status: OrderStatus = Field(..., description="Order Status can be pending, processing, shipped, delivered, cancelled ")  # "pending", "processing", "shipped", "delivered", "cancelled"
+    payment_method: PaymentMethod = Field(..., description="Payment Method can be Online, Cash, Cash on delivery")  # "online", "cash", "cod"
+    total_amount: float = Field(..., description="Total amount of the ordered items")
+    order_items: List[OrderItem] = Field(..., description="Order_items List of items ")
     class Config:
         arbitrary_types_allowed = True

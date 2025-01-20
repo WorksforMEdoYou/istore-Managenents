@@ -1,8 +1,7 @@
 from bson import ObjectId
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field
 from typing import List
 from datetime import datetime
-from enum import Enum
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -22,20 +21,25 @@ class PyObjectId(ObjectId):
 # this require the medicine_id, batch id from stock
 
 class SaleItem(BaseModel):
-    medicine_id: int
-    batch_id: str # this id should contain the stock id
-    expiry_date: datetime
-    quantity: int
-    price: float
+    medicine_id: int = Field(..., description="Medicine ID from the MYSQL medicine_master table")
+    batch_id: str = Field(..., description="Batch ObjectID from the stock ObjectID") # this id should contain the stock id
+    expiry_date: datetime = Field(..., description="Expiry date of a medicine")
+    quantity: int = Field(..., description="Quantity of the medicine")
+    price: float = Field(..., description="Price of the medicine")
     class Config:
         arbitrary_types_allowed = True
 
 class Sale(BaseModel):
-    store_id: int
-    sale_date: datetime
-    customer_id: str  # Changed from int
-    total_amount: float
-    invoice_id: str
-    sale_items: List[SaleItem]
+    
+    """
+    Base model for the Sale collection.
+    """
+    
+    store_id: int = Field(..., description="Store ID from the MYSQL store_details table")
+    sale_date: datetime = Field(..., description="Sale Date")
+    customer_id: str = Field(..., description="Customer OBjectId from the customer collection") 
+    total_amount: float = Field(..., description="Total amount of the saled medicine")
+    invoice_id: str = Field(..., description="invoice ID of the bill")
+    sale_items: List[SaleItem] = Field(..., description="List of Saled medicines")
     class Config:
         arbitrary_types_allowed = True

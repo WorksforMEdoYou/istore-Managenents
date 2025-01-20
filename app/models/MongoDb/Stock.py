@@ -2,7 +2,7 @@ from bson import ObjectId
 from pydantic import BaseModel, Field, constr
 from typing import List
 from datetime import datetime
-from enum import Enum
+from app.models.MongoDb.Eunums import MedicineForms, UnitsInPack
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -19,36 +19,24 @@ class PyObjectId(ObjectId):
     def __modify_schema__(cls, field_schema):
         field_schema.update(type="string")
 
-# this require store_id, medicine_id from the sql
-
-class MedicineForms(str, Enum):
-    def __str__(self):
-        return str(self.value)
-    LIQUID = "liquid"
-    TABLET = "tablet"
-    INJECTION = "injection"
-    CAPSULE = "capsule"
-    POWDER = "powder"
-
-class UnitsInPack(str, Enum):
-    def __str__(self):
-        return str(self.value)
-    ML = "ml"
-    COUNT = "count"
-    MGMS = "mgms"
-
 class BatchDetails(BaseModel):
-    expiry_date: datetime
-    units_in_pack: UnitsInPack
-    batch_quantity: int
+    expiry_date: datetime = Field(..., description="Expity date of the batch medicines")
+    units_in_pack: UnitsInPack = Field(..., description="Units In Pack for the batch medicines")
+    batch_quantity: int = Field(..., description="Batch quantity of the batch medicines")
+    batch_number: constr(max_length=255) = Field(..., description="Batch number for the medicines") # added new field according to the review
     class config:
         arbitrary_types_allowed = True
 
 class Stock(BaseModel):
-    store_id: int
-    medicine_id: int
-    medicine_form: MedicineForms
-    available_stock: int
-    batch_detais: BatchDetails
+    
+    """
+    Base model for the Stock collection.
+    """
+    
+    store_id: int = Field(..., description="Store ID from the MYSQL store_details table")
+    medicine_id: int = Field(..., description="Medicine ID from the MYSQL medicine_master table")
+    medicine_form: MedicineForms = Field(..., description="Medicine form can liquid, tablet, injuction, capsule, powder")
+    available_stock: int = Field(..., description="Available stock of total medicines in batchs")
+    batch_detais: BatchDetails = Field(..., description="batch details")
     class Config:
         arbitrary_types_allowed = True

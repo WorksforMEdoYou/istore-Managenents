@@ -3,11 +3,19 @@ from typing import Optional
 from enum import Enum
 
 class StoreStatus(str, Enum):
+    
+    """
+    Enum for the StoreStatus
+    """
     ACTIVE = "active"
     INACTIVE = "inactive"
     CLOSED = "closed"
 
 class StoreDetailsBase(BaseModel):
+    
+    """
+    Base model for StoreDetails containing common fields.
+    """
     store_name: constr(max_length=255)
     license_number: constr(max_length=50)
     gst_state_code: constr(max_length=2)
@@ -23,9 +31,17 @@ class StoreDetailsBase(BaseModel):
     status: StoreStatus  # the store status can be active, inactive or closed
 
 class StoreDetailsCreate(StoreDetailsBase):
+    
+    """
+    Pydantic model for creating a new store details record.
+    """
     pass
 
 class StoreDetails(StoreDetailsBase):
+    
+    """
+    Pydantic model for representing detailed storeDetails information.
+    """
     store_id: Optional[int]
 
     class Config:

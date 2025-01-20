@@ -1,8 +1,6 @@
 from bson import ObjectId
 from pydantic import BaseModel, Field, constr
-from typing import List
 from datetime import datetime
-from enum import Enum
 
 class PyObjectId(ObjectId):
     @classmethod
@@ -19,13 +17,17 @@ class PyObjectId(ObjectId):
     def __modify_schema__(cls, field_schema):
         field_schema.update(type="string")
 
-# reuire the medicine id from mysql
 class MedicineAvailability(BaseModel):
-    store_id: int
-    medicine_id: int
-    available_quantity: int
-    last_updated: datetime
-    updated_by: int
+    
+    """
+    Base model for the Medicine Availability collection.
+    """
+    
+    store_id: int = Field(..., description="Store ID from the MYSQL store_details table")
+    medicine_id: int = Field(..., description="Medicine ID from the MYSQL medicine_master table")
+    available_quantity: int = Field(..., description="Medicine Availabiliry for the particular medicine")
+    last_updated: datetime = Field(..., description="Last Updated")
+    updated_by: constr(max_length=255) = Field(..., description="Updated by Either can be a User_id or user_name from the MYSQL user table")
     class Config:
         arbitrary_types_allowed = True
         
