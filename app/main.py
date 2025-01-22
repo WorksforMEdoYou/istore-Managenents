@@ -2,12 +2,12 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.crud import store, customers, medicineavailable, orders, substitutes, distributors, manufacturers, purchase, sales, stock, customers, medicinemaster, category, users, pricing
+from app.routers.stores import store, customers, medicineavailable, orders, substitutes, distributors, manufacturers, purchase, sales, stock, customers, medicinemaster, category, users, pricing
 from fastapi.encoders import jsonable_encoder
 from bson import ObjectId
 import logging
 # from service our bussness model logic
-from app.Service import store as store_service
+from app.routers.stores.service import service_store
 
 app = FastAPI()
 
@@ -53,7 +53,7 @@ def read_root():
     return {"message": "Welcome to the Istore"}
 
 #service 
-app.include_router(store_service.router, prefix="/storeapi/service", tags=["Service"])
+app.include_router(service_store.router, prefix="/storeapi/service", tags=["Service"])
 
 # Global Exception Handlers
 @app.exception_handler(StarletteHTTPException)
