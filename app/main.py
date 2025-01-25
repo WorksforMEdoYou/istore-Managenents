@@ -2,12 +2,12 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from app.routers.stores import store, customers, medicineavailable, orders, substitutes, distributors, manufacturers, purchase, sales, stock, customers, medicinemaster, category, users, pricing
+from app.routers import store, customers, medicineavailable, orders, substitutes, distributors, manufacturers, purchase, sales, stock, customers, medicinemaster, category, users, pricing
 from fastapi.encoders import jsonable_encoder
 from bson import ObjectId
 import logging
 # from service our bussness model logic
-from app.routers.stores.service import service_store
+from app.routers import service_store
 
 app = FastAPI()
 
