@@ -5,7 +5,7 @@ from app.db.mysql_session import get_db
 from app.models.store_mysql_models import MedicineMaster as MedicineMasterModel 
 from app.schemas.MedicinemasterSchema import MedicineMaster as MedicineMasterSchema, MedicineMasterCreate
 import logging
-from app.crud.medicine_master import create_medicine_master_record, get_medicine_master_record, update_medicine_master_record, delete_medicine_master_record
+from app.crud.medicine_master import create_medicine_master_record, get_medicine_master_record, update_medicine_master_record, get_medicine_list, activate_medicine_record
 
 router = APIRouter()
 
@@ -22,39 +22,39 @@ def create_medicine_master(medicine_master: MedicineMasterCreate, db: Session = 
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/medicine_master/", response_model=List[MedicineMasterSchema], status_code=status.HTTP_200_OK)
-def get_all_medicine_master(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+@router.get("/medicine_master/", status_code=status.HTTP_200_OK)
+def get_all_medicine_master(db: Session = Depends(get_db)):
     try:
-        medicine_master = db.query(MedicineMasterModel).offset(skip).limit(limit).all()
+        medicine_master = get_medicine_list(db=db)
         return medicine_master
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/medicine_master/{medicine_id}", response_model=MedicineMasterSchema, status_code=status.HTTP_200_OK)
-def get_medicine_master(medicine_id: int, db: Session = Depends(get_db)):
+@router.get("/medicine_master/{medicine_name}", response_model=MedicineMasterSchema, status_code=status.HTTP_200_OK)
+def get_medicine_master(medicine_name: str, db: Session = Depends(get_db)):
     try:
-        medicine_master = get_medicine_master_record(medicine_id=medicine_id, db=db)
+        medicine_master = get_medicine_master_record(medicine_name=medicine_name, db=db)
         return medicine_master
     except Exception as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.put("/medicine_master/{medicine_id}", response_model=MedicineMasterSchema, status_code=status.HTTP_200_OK)
-def update_medicine_master(medicine_id: int, medicine_master: MedicineMasterCreate, db: Session = Depends(get_db)):
+@router.put("/medicine_master/{medicine_name}", response_model=MedicineMasterSchema, status_code=status.HTTP_200_OK)
+def update_medicine_master(medicine_name: str, medicine_master: MedicineMasterCreate, db: Session = Depends(get_db)):
     try:
-        db_medicine_master = update_medicine_master_record(medicine_id=medicine_id, medicine_master=medicine_master, db=db)
+        db_medicine_master = update_medicine_master_record(medicine_name=medicine_name, medicine_master=medicine_master, db=db)
         return db_medicine_master
     except Exception as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.delete("/medicine_master/{medicine_id}", response_model=dict, status_code=status.HTTP_200_OK)
-def delete_medicine_master(medicine_id: int, db: Session = Depends(get_db)):
+@router.put("/medicine_master/activate/{medicine_name}", status_code=status.HTTP_200_OK)
+def activate_deactivate(medicine_name:str, active_flag:int, db:Session = Depends(get_db)):
     try:
-        db_medicine_master = delete_medicine_master_record(medicine_id=medicine_id, db=db)
-        return db_medicine_master
+        db_medicine = activate_medicine_record(medicine_name=medicine_name, active_flag=active_flag, db=db)
+        return db_medicine
     except Exception as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")

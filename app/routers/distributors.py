@@ -6,7 +6,7 @@ from app.models.store_mysql_models import Distributor as DistributorModel
 from app.schemas.DistributorSchema import Distributor as DistributorSchema, DistributorCreate
 import logging
 from typing import List
-from app.crud.distributor import creating_distributor_record, get_distibutor_record, update_distributor_record, delete_distributor_record
+from app.crud.distributor import creating_distributor_record, get_all_distributors, get_distibutor_record, update_distributor_record, activate_distributor_record
 
 router = APIRouter()
 
@@ -23,40 +23,40 @@ def create_distributor(distributor: DistributorCreate, db: Session = Depends(get
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/distributors/", response_model=List[DistributorSchema], status_code=status.HTTP_200_OK)
-def list_distributors(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+@router.get("/distributors/", status_code=status.HTTP_200_OK)
+def list_distributors(db: Session = Depends(get_db)):
     try:
-        distributors = db.query(DistributorModel).offset(skip).limit(limit).all()
+        distributors = get_all_distributors(db=db)
         return distributors
     except SQLAlchemyError as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.get("/distributors/{distributor_id}", response_model=DistributorSchema, status_code=status.HTTP_200_OK)
-def get_distributor(distributor_id: int, db: Session = Depends(get_db)):
+@router.get("/distributors/{distributor_name}", response_model=DistributorSchema, status_code=status.HTTP_200_OK)
+def get_distributor(distributor_name: str, db: Session = Depends(get_db)):
     try:
-        distributor = get_distibutor_record(distributor_id=distributor_id, db=db)
+        distributor = get_distibutor_record(distributor_name=distributor_name, db=db)
         return distributor
     except SQLAlchemyError as e:
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.put("/distributors/{distributor_id}", response_model=DistributorSchema, status_code=status.HTTP_200_OK)
-def update_distributor(distributor_id: int, distributor: DistributorCreate, db: Session = Depends(get_db)):
+@router.put("/distributors/{distributor_name}", response_model=DistributorSchema, status_code=status.HTTP_200_OK)
+def update_distributor(distributor_name: str, distributor: DistributorCreate, db: Session = Depends(get_db)):
     try:
-        db_distributor = update_distributor_record(distributor_id=distributor_id, distributor=distributor, db=db)
+        db_distributor = update_distributor_record(distributor_name=distributor_name, distributor=distributor, db=db)
         return db_distributor
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))
 
-@router.delete("/distributors/{distributor_id}", response_model=dict, status_code=status.HTTP_200_OK)
-def delete_distributor(distributor_id: int, db: Session = Depends(get_db)):
+@router.put("/distibutors/active/{distributor_name}", status_code=status.HTTP_200_OK)
+def update_distributor_active_status(distributor_name: str, active_flag: int, db: Session = Depends(get_db)):
     try:
-        db_distributor = delete_distributor_record(distributor_id=distributor_id, db=db)
+        db_distributor = activate_distributor_record(distributor_name=distributor_name, active_flag=active_flag, db=db)
         return db_distributor
-    except SQLAlchemyError as e:
+    except Exception as e:
         db.rollback()
         logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error: " + str(e))

@@ -29,6 +29,7 @@ class StoreDetails(Base):
     verification_status = Column(Enum(StoreVerification), doc="Store verification can be pending, verified")
     active_flag = Column(Integer, doc="0 at creation or 1 active or 2 suspended")
     created_at = Column(DateTime, doc="Date and time when the store was created")
+    updated_at = Column(DateTime, doc="Date and time when the store was updated")
     users = relationship('User', back_populates='store')
   
 class Manufacturer(Base):
@@ -40,6 +41,9 @@ class Manufacturer(Base):
 
     manufacturer_id = Column(Integer, primary_key=True, autoincrement=True)
     manufacturer_name = Column(String(255), doc="manufacturer_name for the medicine_master")
+    created_at = Column(DateTime, doc="manufacturer created at")
+    updated_at = Column(DateTime, doc="manufacturer updated at")
+    active_flag = Column(Integer, doc="0 or 1")
     medicines = relationship("MedicineMaster", back_populates="manufacturer")
 
 class Category(Base):
@@ -51,6 +55,9 @@ class Category(Base):
     
     category_id = Column(Integer, primary_key=True, autoincrement=True)
     category_name = Column(String(255), doc="category name of the medicine")
+    created_at = Column(DateTime, doc="category created at")
+    updated_at = Column(DateTime, doc="category updated at")
+    active_flag = Column(Integer, doc="0 or 1")
     medicines = relationship("MedicineMaster", back_populates="category")
 
 class MedicineMaster(Base):
@@ -69,11 +76,14 @@ class MedicineMaster(Base):
     unit_of_measure = Column(String(10), doc="Unit of Measure of the medicine")
     manufacturer_id = Column(Integer, ForeignKey('manufacturer.manufacturer_id'), doc="ID of the Manufacturer")
     category_id = Column(Integer, ForeignKey('category.category_id'), doc="ID of the Category")
+    created_at = Column(DateTime, doc="medicine created at")
+    updated_at = Column(DateTime, doc="medicine updated at")
+    active_flag = Column(Integer, doc="0 or 1")
     manufacturer = relationship("Manufacturer", back_populates="medicines")
     category = relationship("Category", back_populates="medicines")
 
 class Substitutes(Base):
-    __tablename__ = 'substitutes'
+    __tablename__ = 'substitutes' 
     
     """
     SQLAlchemy model for the medicine substitute table.
@@ -91,7 +101,10 @@ class Distributor(Base):
     """
     
     distributor_id = Column(Integer, primary_key=True, autoincrement=True)
-    distributor_name = Column(String(255), doc="disttributor name for medicine_master")
+    distributor_name = Column(String(255), doc="distributor name for medicine_master")
+    created_at = Column(DateTime, doc="distributor created at")
+    updated_at = Column(DateTime, doc="distributor updated at")
+    active_flag = Column(Integer, doc="0 or 1")
 
 class User(Base):
     __tablename__ = 'users'

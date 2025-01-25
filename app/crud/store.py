@@ -18,8 +18,6 @@ def create_store_record(store: StoreDetailsCreate, db: Session = get_db):
     """
     Creating store record
     """
-    if not store.store_name or not store.license_number or not store.gst_number:
-       raise HTTPException(status_code=400, detail="Invalid input")
     try:
         valid_store = store_validation(store, db)
         if valid_store!="unique":
@@ -41,7 +39,8 @@ def create_store_record(store: StoreDetailsCreate, db: Session = get_db):
             remarks = "",
             verification_status = "pending",
             active_flag = 0,
-            created_at = datetime.now()
+            created_at = datetime.now(),
+            updated_at = datetime.now()
         )
         db.add(db_store)
         db.commit()
@@ -90,7 +89,8 @@ def get_store_record(mobile: str, db: Session = get_db):
                 "status": store.status,
                 "remark": store.remarks,
                 "verification_status": store.verification_status,
-                "created_at": store.created_at
+                "created_at": store.created_at,
+                "updated_at": store.updated_at
             }
             return store_details
     except SQLAlchemyError as e:
@@ -110,6 +110,7 @@ def suspend_activate_store(mobile: str, remarks_text: str, active_flag_store: in
         if store:
             store.remarks = remarks_text
             store.active_flag = active_flag_store
+            store.updated_at = datetime.now()
             db.commit()
             db.refresh(store)
             return store
@@ -132,6 +133,7 @@ def verify_stores(mobile: str, verification: str, db: Session = Depends(get_db))
         store = db.query(StoreDetailsModel).filter(StoreDetailsModel.mobile == mobile).first()
         if store:
             store.verification_status = verification
+            store.updated_at = datetime.now()
             if verification == "verified":
                 store.active_flag = 1
             db.commit()
@@ -173,6 +175,7 @@ def update_store_record(mobile: str, store: StoreDetailsCreate, db: Session = De
             db_store.verification_status = db_store.verification_status
             db_store.active_flag = db_store.active_flag
             db_store.created_at = db_store.created_at
+            db_store.updated_at = datetime.now()
             
             db.commit()
             db.refresh(db_store)
